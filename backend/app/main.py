@@ -43,10 +43,14 @@ async def lifespan(app: FastAPI):
     logger.info("DB pool ready")
 
     # Load embedding model (CPU-bound, do in thread to avoid blocking startup)
+    # Non-fatal: app starts degraded if sentence_transformers not installed.
     import asyncio as _asyncio
     from app import embeddings as _emb
-    await _asyncio.to_thread(_emb.load_model)
-    logger.info("Embedding model loaded")
+    try:
+        await _asyncio.to_thread(_emb.load_model)
+        logger.info("Embedding model loaded")
+    except Exception as exc:
+        logger.warning("Embedding model NOT loaded (%s) — scoring/resume disabled", type(exc).__name__)
 
     # Start background workers
     from app.workers.fetch import JobFetchWorker

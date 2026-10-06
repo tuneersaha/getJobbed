@@ -275,22 +275,62 @@ class TestExtractPlainText:
 
 @pytest.mark.integration
 class TestScoringWorkerIntegration:
-    """Integration tests — real DB, transactions rolled back."""
+    """
+    Integration tests — real DB, committed transactions.
+
+    Uses db_pool so workers can call get_conn() (module-level singleton).
+    Setup data must be committed before process_task() so the worker's
+    separate pool connection can see it.
+    """
 
     @pytest.mark.asyncio
-    async def test_creates_match_for_passing_job(self, async_db_conn):
+    async def test_creates_match_for_passing_job(self, db_pool):
         """process_task creates a user_job_matches row when job passes filter."""
-        # Insert test user + profile + resume + job
-        user_id = await _insert_user(async_db_conn)
-        await _insert_profile(async_db_conn, user_id)
-        resume_emb = [0.1] * 384
-        await _insert_resume(async_db_conn, user_id, embedding=resume_emb)
-        job_id = await _insert_job(async_db_conn, title="Data Engineer", description="Python SQL Docker")
+        async with db_pool.connection() as conn:
+            user_id = await _insert_user(conn)
+            await _insert_profile(conn, user_id)
+            resume_emb = [0.1] * 384
+            await _insert_resume(conn, user_id, embedding=resume_emb)
+            job_id = await _insert_job(conn, title="Data Engineer", description="Python SQL Docker")
+            await conn.commit()
 
-        # Mock embedding model
-        job_emb = [0.1] * 384
-        with patch("app.embeddings.is_loaded", return_value=True):
-            with patch("app.embeddings.encode", new=AsyncMock(return_value=job_emb)):
+        try:
+            job_emb = [0.1] * 384
+            with patch("app.embeddings.is_loaded", return_value=True):
+                with patch("app.embeddings.encode", new=AsyncMock(return_value=job_emb)):
+                    with patch("app.embeddings.cosine_similarity", return_value=1.0):
+                        from app.workers.scoring import ScoringWorker
+                        worker = ScoringWorker()
+                        await worker.process_task(
+                            task_id=1,
+                            payload={"job_id": str(job_id), "user_id": str(user_id)},
+                            attempts=1,
+                        )
+
+            async with db_pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT match_score, status FROM user_job_matches WHERE user_id = %s AND job_id = %s",
+                    [user_id, job_id],
+                )
+                row = await cur.fetchone()
+                assert row is not None
+                assert float(row[0]) > 0.0
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_skips_filtered_job(self, db_pool):
+        """process_task does NOT create a match when job is filtered out."""
+        async with db_pool.connection() as conn:
+            user_id = await _insert_user(conn)
+            await _insert_profile(conn, user_id)
+            resume_emb = [0.1] * 384
+            await _insert_resume(conn, user_id, embedding=resume_emb)
+            job_id = await _insert_job(conn, title="Senior Data Engineer", description="Python SQL")
+            await conn.commit()
+
+        try:
+            with patch("app.embeddings.is_loaded", return_value=True):
                 from app.workers.scoring import ScoringWorker
                 worker = ScoringWorker()
                 await worker.process_task(
@@ -299,67 +339,47 @@ class TestScoringWorkerIntegration:
                     attempts=1,
                 )
 
-        cur = await async_db_conn.execute(
-            "SELECT match_score, status FROM user_job_matches WHERE user_id = %s AND job_id = %s",
-            [user_id, job_id],
-        )
-        row = await cur.fetchone()
-        assert row is not None
-        assert float(row[0]) > 0.0
+            async with db_pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT id FROM user_job_matches WHERE user_id = %s AND job_id = %s",
+                    [user_id, job_id],
+                )
+                assert await cur.fetchone() is None
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
 
     @pytest.mark.asyncio
-    async def test_skips_filtered_job(self, async_db_conn):
-        """process_task does NOT create a match when job is filtered out."""
-        user_id = await _insert_user(async_db_conn)
-        await _insert_profile(async_db_conn, user_id)
-        resume_emb = [0.1] * 384
-        await _insert_resume(async_db_conn, user_id, embedding=resume_emb)
-        job_id = await _insert_job(
-            async_db_conn,
-            title="Senior Data Engineer",  # filtered by seniority
-            description="Python SQL",
-        )
-
-        with patch("app.embeddings.is_loaded", return_value=True):
-            from app.workers.scoring import ScoringWorker
-            worker = ScoringWorker()
-            await worker.process_task(
-                task_id=1,
-                payload={"job_id": str(job_id), "user_id": str(user_id)},
-                attempts=1,
-            )
-
-        cur = await async_db_conn.execute(
-            "SELECT id FROM user_job_matches WHERE user_id = %s AND job_id = %s",
-            [user_id, job_id],
-        )
-        assert await cur.fetchone() is None
-
-    @pytest.mark.asyncio
-    async def test_idempotent_second_run(self, async_db_conn):
+    async def test_idempotent_second_run(self, db_pool):
         """Running process_task twice produces the same match row (idempotent)."""
-        user_id = await _insert_user(async_db_conn)
-        await _insert_profile(async_db_conn, user_id)
-        resume_emb = [0.1] * 384
-        await _insert_resume(async_db_conn, user_id, embedding=resume_emb)
-        job_id = await _insert_job(async_db_conn, description="Python SQL Docker")
+        async with db_pool.connection() as conn:
+            user_id = await _insert_user(conn)
+            await _insert_profile(conn, user_id)
+            resume_emb = [0.1] * 384
+            await _insert_resume(conn, user_id, embedding=resume_emb)
+            job_id = await _insert_job(conn, description="Python SQL Docker")
+            await conn.commit()
 
-        job_emb = [0.1] * 384
-        payload = {"job_id": str(job_id), "user_id": str(user_id)}
+        try:
+            job_emb = [0.1] * 384
+            payload = {"job_id": str(job_id), "user_id": str(user_id)}
 
-        with patch("app.embeddings.is_loaded", return_value=True):
-            with patch("app.embeddings.encode", new=AsyncMock(return_value=job_emb)):
-                from app.workers.scoring import ScoringWorker
-                worker = ScoringWorker()
-                await worker.process_task(task_id=1, payload=payload, attempts=1)
-                await worker.process_task(task_id=2, payload=payload, attempts=1)
+            with patch("app.embeddings.is_loaded", return_value=True):
+                with patch("app.embeddings.encode", new=AsyncMock(return_value=job_emb)):
+                    with patch("app.embeddings.cosine_similarity", return_value=1.0):
+                        from app.workers.scoring import ScoringWorker
+                        worker = ScoringWorker()
+                        await worker.process_task(task_id=1, payload=payload, attempts=1)
+                        await worker.process_task(task_id=2, payload=payload, attempts=1)
 
-        cur = await async_db_conn.execute(
-            "SELECT COUNT(*) FROM user_job_matches WHERE user_id = %s AND job_id = %s",
-            [user_id, job_id],
-        )
-        row = await cur.fetchone()
-        assert row[0] == 1  # exactly one match row
+            async with db_pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT COUNT(*) FROM user_job_matches WHERE user_id = %s AND job_id = %s",
+                    [user_id, job_id],
+                )
+                row = await cur.fetchone()
+                assert row[0] == 1
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
 
 
 # ─── Helpers for integration tests ───────────────────────────────────────────
@@ -408,3 +428,17 @@ async def _insert_job(conn, title="Data Engineer", description="Python SQL Docke
         [str(uuid.uuid4()), title, description],
     )
     return (await cur.fetchone())[0]
+
+
+async def _cleanup(pool, *, user_id, job_id):
+    """Delete test rows in dependency order to avoid FK violations."""
+    async with pool.connection() as conn:
+        await conn.execute(
+            "DELETE FROM user_job_matches WHERE user_id = %s OR job_id = %s",
+            [user_id, job_id],
+        )
+        await conn.execute("DELETE FROM user_resumes WHERE user_id = %s", [user_id])
+        await conn.execute("DELETE FROM user_profiles WHERE user_id = %s", [user_id])
+        await conn.execute("DELETE FROM users WHERE id = %s", [user_id])
+        await conn.execute("DELETE FROM jobs WHERE id = %s", [job_id])
+        await conn.commit()

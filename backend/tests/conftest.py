@@ -57,3 +57,31 @@ async def async_db_conn(test_db_url):
         await conn.set_autocommit(False)
         yield conn
         await conn.rollback()
+
+
+@pytest.fixture
+async def db_pool(test_db_url):
+    """
+    Opens a real connection pool and sets it as the module-level singleton.
+    Required for worker integration tests: workers call get_conn() which
+    uses the singleton pool, and setup data must be committed before calling
+    process_task() so the worker's separate connection can see it.
+    Restores the singleton to None after the test.
+    """
+    import os
+    from app.db import create_pool, set_pool
+    from app import db as _db_module
+
+    orig = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = test_db_url
+
+    pool = await create_pool(min_size=1, max_size=5)
+    set_pool(pool)
+    yield pool
+    await pool.close()
+    _db_module._pool = None
+
+    if orig is None:
+        os.environ.pop("DATABASE_URL", None)
+    else:
+        os.environ["DATABASE_URL"] = orig

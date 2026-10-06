@@ -119,109 +119,109 @@ class TestBuildPrompt:
 
 @pytest.mark.integration
 class TestTailoringWorkerIntegration:
-    """Integration tests — real DB, mocked OpenRouter."""
+    """
+    Integration tests — real DB, mocked OpenRouter.
+
+    Uses db_pool so workers can call get_conn() (module-level singleton).
+    Setup data committed before process_task() so worker's connection sees it.
+    """
 
     @pytest.mark.asyncio
-    async def test_stores_tailored_resume_on_success(self, async_db_conn):
+    async def test_stores_tailored_resume_on_success(self, db_pool):
         """Successful OpenRouter call stores tailored_resumes row + sets status=ready."""
-        user_id, match_id = await _setup_match(async_db_conn)
+        async with db_pool.connection() as conn:
+            user_id, match_id, job_id = await _setup_match(conn)
+            await conn.commit()
 
-        mock_response = _mock_openrouter_response(GOOD_LATEX)
+        try:
+            mock_response = _mock_openrouter_response(GOOD_LATEX)
 
-        with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-            mock_client_fn.return_value = mock_client
+            with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
+                mock_client = MagicMock()
+                mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+                mock_client_fn.return_value = mock_client
 
-            from app.workers.tailoring import TailoringWorker
-            worker = TailoringWorker()
-            await worker.process_task(
-                task_id=1,
-                payload={"match_id": str(match_id)},
-                attempts=1,
-            )
+                from app.workers.tailoring import TailoringWorker
+                worker = TailoringWorker()
+                await worker.process_task(task_id=1, payload={"match_id": str(match_id)}, attempts=1)
 
-        # tailored_resumes row created
-        cur = await async_db_conn.execute(
-            "SELECT latex_source FROM tailored_resumes WHERE match_id = %s",
-            [match_id],
-        )
-        row = await cur.fetchone()
-        assert row is not None
-        assert r"\resumeSubheading" in row[0]
-
-        # match status = ready
-        status_cur = await async_db_conn.execute(
-            "SELECT status FROM user_job_matches WHERE id = %s",
-            [match_id],
-        )
-        assert (await status_cur.fetchone())[0] == "tailoring_done" or \
-               (await async_db_conn.execute(
-                   "SELECT status FROM user_job_matches WHERE id = %s", [match_id]
-               ) and True)  # re-check
-        status_cur2 = await async_db_conn.execute(
-            "SELECT status FROM user_job_matches WHERE id = %s",
-            [match_id],
-        )
-        status_val = (await status_cur2.fetchone())[0]
-        assert status_val == "ready"
-
-    @pytest.mark.asyncio
-    async def test_idempotent_when_tailored_resume_exists(self, async_db_conn):
-        """If tailored_resumes row already exists, skip OpenRouter and mark ready."""
-        user_id, match_id = await _setup_match(async_db_conn)
-
-        # Pre-insert a tailored resume
-        await async_db_conn.execute(
-            """
-            INSERT INTO tailored_resumes (match_id, latex_source, model_used, prompt_tokens, completion_tokens)
-            VALUES (%s, %s, 'test-model', 0, 0)
-            """,
-            [match_id, GOOD_LATEX],
-        )
-
-        call_count = 0
-
-        with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
-            mock_client = MagicMock()
-            async def count_calls(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                return _mock_openrouter_response(GOOD_LATEX)
-            mock_client.chat.completions.create = count_calls
-            mock_client_fn.return_value = mock_client
-
-            from app.workers.tailoring import TailoringWorker
-            worker = TailoringWorker()
-            await worker.process_task(
-                task_id=1,
-                payload={"match_id": str(match_id)},
-                attempts=1,
-            )
-
-        assert call_count == 0  # OpenRouter NOT called
-
-    @pytest.mark.asyncio
-    async def test_validation_failure_raises(self, async_db_conn):
-        """LLM output failing validation raises ValueError (triggers retry)."""
-        user_id, match_id = await _setup_match(async_db_conn)
-
-        bad_output = "not a valid latex document at all"
-        mock_response = _mock_openrouter_response(bad_output)
-
-        with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-            mock_client_fn.return_value = mock_client
-
-            from app.workers.tailoring import TailoringWorker
-            worker = TailoringWorker()
-            with pytest.raises(ValueError, match="validation"):
-                await worker.process_task(
-                    task_id=1,
-                    payload={"match_id": str(match_id)},
-                    attempts=1,
+            async with db_pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT latex_source FROM tailored_resumes WHERE match_id = %s",
+                    [match_id],
                 )
+                row = await cur.fetchone()
+                assert row is not None
+                assert r"\resumeSubheading" in row[0]
+
+                status_cur = await conn.execute(
+                    "SELECT status FROM user_job_matches WHERE id = %s",
+                    [match_id],
+                )
+                assert (await status_cur.fetchone())[0] == "ready"
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_idempotent_when_tailored_resume_exists(self, db_pool):
+        """If tailored_resumes row already exists, skip OpenRouter and mark ready."""
+        async with db_pool.connection() as conn:
+            user_id, match_id, job_id = await _setup_match(conn)
+            await conn.execute(
+                """
+                INSERT INTO tailored_resumes (match_id, latex_source, model_used, prompt_tokens, completion_tokens)
+                VALUES (%s, %s, 'test-model', 0, 0)
+                """,
+                [match_id, GOOD_LATEX],
+            )
+            await conn.commit()
+
+        try:
+            call_count = 0
+
+            with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
+                mock_client = MagicMock()
+                async def count_calls(*args, **kwargs):
+                    nonlocal call_count
+                    call_count += 1
+                    return _mock_openrouter_response(GOOD_LATEX)
+                mock_client.chat.completions.create = count_calls
+                mock_client_fn.return_value = mock_client
+
+                from app.workers.tailoring import TailoringWorker
+                worker = TailoringWorker()
+                await worker.process_task(task_id=1, payload={"match_id": str(match_id)}, attempts=1)
+
+            assert call_count == 0
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
+
+    @pytest.mark.asyncio
+    async def test_validation_failure_raises(self, db_pool):
+        """LLM output failing validation raises ValueError (triggers retry)."""
+        async with db_pool.connection() as conn:
+            user_id, match_id, job_id = await _setup_match(conn)
+            await conn.commit()
+
+        try:
+            bad_output = "not a valid latex document at all"
+            mock_response = _mock_openrouter_response(bad_output)
+
+            with patch("app.workers.tailoring.TailoringWorker._get_openrouter_client") as mock_client_fn:
+                mock_client = MagicMock()
+                mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+                mock_client_fn.return_value = mock_client
+
+                from app.workers.tailoring import TailoringWorker
+                worker = TailoringWorker()
+                with pytest.raises(ValueError, match="validation"):
+                    await worker.process_task(
+                        task_id=1,
+                        payload={"match_id": str(match_id)},
+                        attempts=1,
+                    )
+        finally:
+            await _cleanup(db_pool, user_id=user_id, job_id=job_id)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ def _mock_openrouter_response(content: str):
 
 
 async def _setup_match(conn) -> tuple:
-    """Insert user + profile + resume + job + match in 'tailoring' status. Returns (user_id, match_id)."""
+    """Insert user + profile + resume + job + match in 'tailoring' status. Returns (user_id, match_id, job_id)."""
     # User
     cur = await conn.execute(
         "INSERT INTO users (google_sub, email) VALUES (%s, %s) RETURNING id",
@@ -289,4 +289,16 @@ async def _setup_match(conn) -> tuple:
     )
     match_id = (await match_cur.fetchone())[0]
 
-    return user_id, match_id
+    return user_id, match_id, job_id
+
+
+async def _cleanup(pool, *, user_id, job_id):
+    """Delete test rows in dependency order to avoid FK violations."""
+    async with pool.connection() as conn:
+        await conn.execute("DELETE FROM tailored_resumes WHERE match_id IN (SELECT id FROM user_job_matches WHERE user_id = %s OR job_id = %s)", [user_id, job_id])
+        await conn.execute("DELETE FROM user_job_matches WHERE user_id = %s OR job_id = %s", [user_id, job_id])
+        await conn.execute("DELETE FROM user_resumes WHERE user_id = %s", [user_id])
+        await conn.execute("DELETE FROM user_profiles WHERE user_id = %s", [user_id])
+        await conn.execute("DELETE FROM users WHERE id = %s", [user_id])
+        await conn.execute("DELETE FROM jobs WHERE id = %s", [job_id])
+        await conn.commit()
