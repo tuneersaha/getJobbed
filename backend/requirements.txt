@@ -1,0 +1,38 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Database
+psycopg[binary,pool]==3.2.3
+
+# Auth — Google ID token validation via JWKS
+python-jose[cryptography]==3.3.0
+httpx==0.28.1
+
+# Validation
+pydantic==2.10.3
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# Job description HTML stripping
+bleach==6.2.0
+
+# Embeddings — loaded once at worker startup
+sentence-transformers==3.3.1
+
+# LLM — OpenRouter is OpenAI-compatible
+openai==1.58.1
+
+# Scheduler
+apscheduler==3.10.4
+
+# Numeric ops for cosine similarity
+numpy==2.2.1
+
+# Env loading in scripts
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0

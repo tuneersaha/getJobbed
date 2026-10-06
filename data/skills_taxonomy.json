@@ -1,0 +1,84 @@
+{
+  "skills": [
+    "Python", "JavaScript", "TypeScript", "Go", "Golang", "Java", "Rust",
+    "C", "C++", "C#", "Kotlin", "Swift", "Ruby", "PHP", "Scala", "R",
+    "Bash", "Shell", "PowerShell", "Perl", "Lua", "Elixir", "Haskell",
+    "SQL", "PL/pgSQL", "HCL", "YAML",
+
+    "FastAPI", "Django", "Flask", "Starlette", "Litestar",
+    "Spring", "Spring Boot", "Quarkus", "Micronaut",
+    "Express", "Express.js", "NestJS", "Hono", "Fastify",
+    "Rails", "Ruby on Rails", "Laravel", "Symfony",
+    "Gin", "Echo", "Fiber",
+    "Actix", "Axum", "Rocket",
+    "gRPC", "GraphQL", "REST", "WebSocket", "OpenAPI",
+
+    "React", "Next.js", "Vue", "Vue.js", "Nuxt", "Angular", "Svelte", "SvelteKit",
+    "HTML", "CSS", "Tailwind", "TailwindCSS", "Sass", "SCSS",
+    "React Native", "Expo",
+
+    "PostgreSQL", "Postgres", "MySQL", "MariaDB", "SQLite", "Oracle", "MSSQL",
+    "SQL Server",
+
+    "MongoDB", "Redis", "Memcached", "DynamoDB", "Cassandra", "Couchbase",
+    "Firebase", "Firestore", "Supabase", "PlanetScale",
+    "Elasticsearch", "OpenSearch", "Solr",
+    "Neo4j", "ArangoDB",
+
+    "BigQuery", "Snowflake", "Redshift", "Databricks", "ClickHouse",
+    "Delta Lake", "Apache Iceberg", "Apache Hudi",
+    "Hive", "Presto", "Trino", "Athena",
+
+    "Apache Spark", "Spark", "PySpark",
+    "Apache Kafka", "Kafka", "Confluent",
+    "Apache Flink", "Flink",
+    "Airflow", "Apache Airflow", "dbt", "Prefect", "Luigi", "Dagster", "Mage",
+    "Apache Beam",
+    "ETL", "ELT", "Data Pipelines", "Data Lake", "Data Warehouse", "Data Lakehouse",
+
+    "TensorFlow", "PyTorch", "scikit-learn", "sklearn", "Keras",
+    "Hugging Face", "Transformers", "LangChain", "OpenAI",
+    "NumPy", "Pandas", "SciPy", "Matplotlib", "Seaborn", "Plotly",
+    "MLflow", "Weights & Biases", "WandB", "Kubeflow",
+    "RAG", "Vector Database", "pgvector", "Pinecone", "Weaviate", "Chroma",
+    "Machine Learning", "Deep Learning", "NLP", "Computer Vision",
+    "Feature Engineering", "Model Serving",
+
+    "AWS", "Amazon Web Services", "GCP", "Google Cloud", "Azure", "Microsoft Azure",
+    "EC2", "S3", "RDS", "Lambda", "ECS", "EKS", "SQS", "SNS", "CloudFormation",
+    "GKE", "Cloud Run", "Cloud Functions", "Pub/Sub",
+    "AKS", "Azure Functions", "Cosmos DB",
+    "DigitalOcean", "Fly.io", "Heroku", "Vercel", "Netlify", "Render",
+
+    "Docker", "Kubernetes", "K8s", "Helm", "Kustomize",
+    "Terraform", "Ansible", "Pulumi", "CDK",
+    "Nginx", "Caddy", "HAProxy", "Traefik",
+    "Linux", "Ubuntu", "CentOS", "Alpine",
+    "Vagrant", "Packer",
+
+    "GitHub Actions", "GitLab CI", "CircleCI", "Jenkins", "Travis CI",
+    "ArgoCD", "Flux", "Tekton", "Buildkite",
+
+    "Prometheus", "Grafana", "Datadog", "New Relic", "Sentry",
+    "ELK", "Logstash", "Kibana", "Filebeat",
+    "Jaeger", "Zipkin", "OpenTelemetry", "Tempo", "Loki",
+    "PagerDuty", "OpsGenie",
+
+    "OAuth2", "JWT", "OIDC", "SAML", "Auth0", "Keycloak",
+    "TLS", "SSL", "mTLS",
+    "Vault", "HashiCorp Vault", "AWS Secrets Manager",
+
+    "Git", "GitHub", "GitLab", "Bitbucket",
+
+    "pytest", "unittest", "Jest", "Vitest", "Playwright", "Cypress",
+    "JUnit", "Mockito",
+    "Unit Testing", "Integration Testing", "E2E Testing", "TDD",
+
+    "RabbitMQ", "NATS", "Celery",
+
+    "REST API", "GraphQL API", "gRPC", "WebSockets", "Swagger",
+    "JSON", "Protocol Buffers", "Protobuf", "Avro", "Parquet",
+
+    "Agile", "Scrum", "Kanban", "JIRA"
+  ]
+}

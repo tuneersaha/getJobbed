@@ -1,0 +1,77 @@
+/* GetJobbed — Global styles
+   Pitch-black dark mode primary. Light mode via data-theme="light".
+   Design: Linear/Vercel aesthetic.
+*/
+
+:root {
+  --bg:        #000000;
+  --bg-2:      #0D0D0D;
+  --bg-3:      #171717;
+  --fg:        #FAFAFA;
+  --fg-2:      #A1A1AA;
+  --fg-3:      #52525B;
+  --border:    #27272A;
+  --accent:    #3B82F6;
+  --green:     #22C55E;
+  --amber:     #F59E0B;
+  --red:       #EF4444;
+  --font-head: 'Fira Code', monospace;
+  --font-body: 'Fira Sans', sans-serif;
+}
+
+:root[data-theme="light"] {
+  --bg:        #FFFFFF;
+  --bg-2:      #F8F9FA;
+  --bg-3:      #F1F3F5;
+  --fg:        #0A0A0A;
+  --fg-2:      #4B5563;
+  --fg-3:      #9CA3AF;
+  --border:    #E5E7EB;
+  --accent:    #2563EB;
+  --green:     #16A34A;
+  --amber:     #D97706;
+  --red:       #DC2626;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-head);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Code / monospace */
+code, pre, kbd {
+  font-family: var(--font-head);
+}
+
+/* Links */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
