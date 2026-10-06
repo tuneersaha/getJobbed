@@ -8,6 +8,7 @@ Pool lifecycle:
 Route handlers and workers: async with get_conn() as conn: ...
 
 os.environ["DATABASE_URL"] — KeyError at startup if missing (fail fast by design).
+DATABASE_URL format: postgresql://user:pass@host:port/dbname
 """
 
 import os
@@ -29,9 +30,6 @@ async def create_pool(min_size: int = 2, max_size: int = 10) -> psycopg_pool.Asy
         min_size=min_size,
         max_size=max_size,
         open=False,
-        # Supabase Transaction Pooler (PgBouncer transaction mode) does not support
-        # server-side prepared statements. prepare_threshold=0 disables them.
-        kwargs={"prepare_threshold": 0},
     )
     await pool.open()
     return pool

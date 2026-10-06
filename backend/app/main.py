@@ -9,6 +9,7 @@ Auth: all /api/* routes require Google ID token (see app/auth.py).
 /health: public, no auth required.
 """
 
+import asyncio
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -26,24 +27,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Number of concurrent JobFetchWorker asyncio tasks
+_FETCH_WORKER_COUNT = int(os.environ.get("FETCH_WORKER_COUNT", "2"))
+
 
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # ── Startup ──────────────────────────────────────────────────────────────
     logger.info("Starting up — opening DB pool")
     pool = await create_pool()
     set_pool(pool)
     app.state.pool = pool
     logger.info("DB pool ready")
 
+    # Start background workers
+    from app.workers.fetch import JobFetchWorker
+
+    worker_tasks = [
+        asyncio.create_task(
+            JobFetchWorker().run(), name=f"fetch-worker-{i}"
+        )
+        for i in range(_FETCH_WORKER_COUNT)
+    ]
+    logger.info("Started %d fetch worker(s)", _FETCH_WORKER_COUNT)
+
+    # Start APScheduler
+    from app.scheduler import create_scheduler
+
+    scheduler = create_scheduler()
+    scheduler.start()
+    logger.info("Scheduler started")
+
     yield  # application runs here
 
-    # Shutdown
-    logger.info("Shutting down — closing DB pool")
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    logger.info("Shutting down — stopping scheduler")
+    scheduler.shutdown(wait=False)
+
+    logger.info("Cancelling worker tasks")
+    for task in worker_tasks:
+        task.cancel()
+    if worker_tasks:
+        await asyncio.gather(*worker_tasks, return_exceptions=True)
+
+    logger.info("Closing DB pool")
     await pool.close()
-    logger.info("DB pool closed")
+    logger.info("Shutdown complete")
 
 
 # ─── App factory ──────────────────────────────────────────────────────────────
