@@ -26,8 +26,9 @@ async def test_pool_can_execute_query(test_db_url, monkeypatch):
     pool = await create_pool()
     try:
         async with get_conn(pool) as conn:
-            row = await conn.fetchrow("SELECT 1 AS n")
-        assert row["n"] == 1
+            cur = await conn.execute("SELECT 1 AS n")
+            row = await cur.fetchone()
+        assert row[0] == 1
     finally:
         await pool.close()
 
@@ -42,11 +43,13 @@ async def test_pool_reuses_connections(test_db_url, monkeypatch):
     pool = await create_pool()
     try:
         async with get_conn(pool) as conn1:
-            row1 = await conn1.fetchrow("SELECT 1 AS n")
+            cur1 = await conn1.execute("SELECT 1 AS n")
+            row1 = await cur1.fetchone()
         async with get_conn(pool) as conn2:
-            row2 = await conn2.fetchrow("SELECT 2 AS n")
-        assert row1["n"] == 1
-        assert row2["n"] == 2
+            cur2 = await conn2.execute("SELECT 2 AS n")
+            row2 = await cur2.fetchone()
+        assert row1[0] == 1
+        assert row2[0] == 2
     finally:
         await pool.close()
 
@@ -66,7 +69,8 @@ async def test_get_conn_rolls_back_on_exception(test_db_url, monkeypatch):
                 raise ValueError("intentional error")
         # Pool still works after a rolled-back connection
         async with get_conn(pool) as conn:
-            row = await conn.fetchrow("SELECT 42 AS n")
-        assert row["n"] == 42
+            cur = await conn.execute("SELECT 42 AS n")
+            row = await cur.fetchone()
+        assert row[0] == 42
     finally:
         await pool.close()

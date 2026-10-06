@@ -37,7 +37,7 @@ except ImportError:
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-DB_URL = os.environ["DATABASE_URL"]
+DB_URL = os.environ.get("DATABASE_URL_TEST") or os.environ["DATABASE_URL"]
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 FEASHLIAA_BASE = "https://raw.githubusercontent.com/Feashliaa/job-board-aggregator/main/data"

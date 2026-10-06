@@ -122,13 +122,14 @@ class TestGetOrCreateUser:
 
         assert user_id is not None
         # Verify row exists in DB
-        row = await async_db_conn.fetchrow(
-            "SELECT id, google_sub, email FROM users WHERE id = $1",
-            user_id,
+        cur = await async_db_conn.execute(
+            "SELECT id, google_sub, email FROM users WHERE id::text = %s",
+            [user_id],
         )
+        row = await cur.fetchone()
         assert row is not None
-        assert row["google_sub"] == google_sub
-        assert row["email"] == email
+        assert row[1] == google_sub
+        assert row[2] == email
 
     @pytest.mark.asyncio
     async def test_returns_same_id_on_second_call(self, async_db_conn):

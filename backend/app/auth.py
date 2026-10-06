@@ -124,24 +124,25 @@ async def get_or_create_user(
     Safe to call multiple times with the same google_sub — the UNIQUE
     constraint on google_sub makes this idempotent.
     """
-    row = await conn.fetchrow(
-        "SELECT id FROM users WHERE google_sub = $1",
-        google_sub,
+    cur = await conn.execute(
+        "SELECT id FROM users WHERE google_sub = %s",
+        [google_sub],
     )
+    row = await cur.fetchone()
     if row:
-        return str(row["id"])
+        return str(row[0])
 
-    row = await conn.fetchrow(
+    cur = await conn.execute(
         """
         INSERT INTO users (google_sub, email)
-        VALUES ($1, $2)
+        VALUES (%s, %s)
         ON CONFLICT (google_sub) DO UPDATE SET email = EXCLUDED.email
         RETURNING id
         """,
-        google_sub,
-        email,
+        [google_sub, email],
     )
-    return str(row["id"])
+    row = await cur.fetchone()
+    return str(row[0])
 
 
 async def require_auth(
