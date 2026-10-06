@@ -14,7 +14,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -129,10 +129,35 @@ async def validation_error_handler(request, exc):
     )
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    """Flatten HTTPException detail dict to top-level RFC 7807 shape."""
+    detail = exc.detail
+    if isinstance(detail, dict):
+        content = detail
+    else:
+        content = {"code": "ERROR", "message": str(detail)}
+    headers = getattr(exc, "headers", None) or {}
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
+
+
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
 from app.routers import resume as resume_router
+from app.routers import jobs as jobs_router
+from app.routers import matches as matches_router
+from app.routers import applied as applied_router
+from app.routers import profile as profile_router
+from app.routers import fetch as fetch_router
+from app.routers import stats as stats_router
+
 app.include_router(resume_router.router)
+app.include_router(jobs_router.router)
+app.include_router(matches_router.router)
+app.include_router(applied_router.router)
+app.include_router(profile_router.router)
+app.include_router(fetch_router.router)
+app.include_router(stats_router.router)
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -163,7 +188,26 @@ async def health():
     embedding_status = "loaded" if _emb.is_loaded() else "not_loaded"
     overall = "ok" if db_status == "ok" else "degraded"
 
-    body = {"status": overall, "db": db_status, "embedding_model": embedding_status}
+    # Queue depth — best-effort, skip on DB error
+    queue_depth = 0
+    if db_status == "ok":
+        try:
+            pool = get_pool()
+            async with get_conn(pool) as conn:
+                qc = await conn.execute(
+                    "SELECT COUNT(*) FROM job_queue WHERE status = 'pending'"
+                )
+                qr = await qc.fetchone()
+                queue_depth = int(qr[0])
+        except Exception:
+            pass
+
+    body = {
+        "status": overall,
+        "db": db_status,
+        "embedding_model": embedding_status,
+        "queue_depth": queue_depth,
+    }
     if db_error:
         body["db_error"] = db_error
 
