@@ -42,8 +42,16 @@ async def lifespan(app: FastAPI):
     app.state.pool = pool
     logger.info("DB pool ready")
 
+    # Load embedding model (CPU-bound, do in thread to avoid blocking startup)
+    import asyncio as _asyncio
+    from app import embeddings as _emb
+    await _asyncio.to_thread(_emb.load_model)
+    logger.info("Embedding model loaded")
+
     # Start background workers
     from app.workers.fetch import JobFetchWorker
+    from app.workers.scoring import ScoringWorker
+    from app.workers.tailoring import TailoringWorker
 
     worker_tasks = [
         asyncio.create_task(
@@ -51,7 +59,11 @@ async def lifespan(app: FastAPI):
         )
         for i in range(_FETCH_WORKER_COUNT)
     ]
-    logger.info("Started %d fetch worker(s)", _FETCH_WORKER_COUNT)
+    worker_tasks += [
+        asyncio.create_task(ScoringWorker().run(),   name="scoring-worker"),
+        asyncio.create_task(TailoringWorker().run(), name="tailoring-worker"),
+    ]
+    logger.info("Started %d fetch worker(s) + scoring + tailoring workers", _FETCH_WORKER_COUNT)
 
     # Start APScheduler
     from app.scheduler import create_scheduler
@@ -113,6 +125,12 @@ async def validation_error_handler(request, exc):
     )
 
 
+# ─── Routers ──────────────────────────────────────────────────────────────────
+
+from app.routers import resume as resume_router
+app.include_router(resume_router.router)
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["system"])
@@ -125,6 +143,8 @@ async def health():
 
     Never exposes DATABASE_URL, credentials, or internal config.
     """
+    from app import embeddings as _emb
+
     try:
         pool = get_pool()
         async with get_conn(pool) as conn:
@@ -136,9 +156,10 @@ async def health():
         db_status = "error"
         db_error = type(exc).__name__  # class name only, no message (may contain creds)
 
+    embedding_status = "loaded" if _emb.is_loaded() else "not_loaded"
     overall = "ok" if db_status == "ok" else "degraded"
 
-    body = {"status": overall, "db": db_status}
+    body = {"status": overall, "db": db_status, "embedding_model": embedding_status}
     if db_error:
         body["db_error"] = db_error
 
