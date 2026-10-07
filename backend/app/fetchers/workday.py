@@ -5,7 +5,9 @@ POST https://{company}.{wd_num}.myworkdayjobs.com/wday/cxs/{company}/{site_id}/j
 Handles pagination (20 jobs per page).
 """
 
+import asyncio
 import logging
+import re
 from datetime import datetime
 
 import httpx
@@ -23,6 +25,39 @@ SOURCE = "workday"
 logger = logging.getLogger(__name__)
 _PAGE_SIZE = 20
 _MAX_PAGES = 10  # cap at 200 jobs per company per run
+
+# Known Workday pods to probe in robots.txt discovery
+_WD_PODS = ["wd1", "wd2", "wd3", "wd5", "wd10", "wd12", "wd103"]
+_ROBOTS_ALLOW_RE = re.compile(r"^Allow:\s*/([a-z0-9][a-z0-9_\-]+)/", re.IGNORECASE | re.MULTILINE)
+
+
+async def discover_site_ids(client: httpx.AsyncClient, tenant: str) -> list[tuple[str, str]]:
+    """
+    Probe robots.txt across all known Workday pods for a given tenant name.
+    Returns list of (wd_num, site_id) tuples found.
+    The correct pod returns HTTP 200 with Allow: /{site_id}/ lines; wrong pods return 422.
+    """
+    _BLOCKLIST = {"wday", "cxs", "job", "jobs", "apply", "login", "redirect", "external"}
+
+    async def probe(pod: str) -> list[tuple[str, str]]:
+        url = f"https://{tenant}.{pod}.myworkdayjobs.com/robots.txt"
+        try:
+            r = await client.get(url, timeout=8)
+            if r.status_code != 200:
+                return []
+            site_ids = [
+                m.group(1) for m in _ROBOTS_ALLOW_RE.finditer(r.text)
+                if m.group(1).lower() not in _BLOCKLIST and len(m.group(1)) >= 2
+            ]
+            return [(pod, sid) for sid in site_ids]
+        except Exception:
+            return []
+
+    results = await asyncio.gather(*[probe(pod) for pod in _WD_PODS])
+    found = [item for sublist in results for item in sublist]
+    if found:
+        logger.info("workday robots.txt discovery: tenant=%s found=%s", tenant, found)
+    return found
 
 
 def _parse_slug(ats_slug: str) -> tuple[str, str, str] | None:

@@ -6,6 +6,7 @@ strip_html, extract_experience, detect_work_type, validate_apply_url are
 called by every fetcher before returning.
 """
 
+import html as _html
 import re
 import logging
 from dataclasses import dataclass, field
@@ -35,6 +36,24 @@ _CITIZENSHIP_RE = re.compile(
 _GREENHOUSE_URL_RE = re.compile(r"boards\.greenhouse\.io/([a-z0-9][a-z0-9\-]+[a-z0-9])/jobs/")
 _LEVER_URL_RE      = re.compile(r"jobs\.lever\.co/([a-z0-9][a-z0-9\-]+[a-z0-9])/")
 _ASHBY_URL_RE      = re.compile(r"jobs\.ashbyhq\.com/([a-z0-9][a-z0-9\-]+[a-z0-9])/")
+_BAMBOOHR_URL_RE   = re.compile(r"([a-z0-9][a-z0-9\-]+[a-z0-9])\.bamboohr\.com", re.IGNORECASE)
+_ICIMS_URL_RE      = re.compile(r"careers-([a-z0-9][a-z0-9\-]+[a-z0-9])\.icims\.com", re.IGNORECASE)
+# Paylocity slugs are UUIDs (hex + hyphens) — satisfy SLUG_RE
+_PAYLOCITY_URL_RE  = re.compile(
+    r"recruiting\.paylocity\.com/recruiting/jobs/(?:All/)?"
+    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    re.IGNORECASE,
+)
+# Workday slug = "company|wd_num|site_id" — two URL shapes:
+#   API:   .../wday/cxs/{company}/{site_id}/jobs
+#   Apply: .../{locale?}/{site_id}/job/...
+_WORKDAY_BASE_RE  = re.compile(
+    r"([a-z0-9][a-z0-9\-]*)\.([a-z0-9]+)\.myworkdayjobs\.com", re.IGNORECASE
+)
+_WORKDAY_API_RE   = re.compile(r"/wday/cxs/[a-z0-9][a-z0-9_\-]*/([a-z0-9][a-z0-9_\-]+)", re.IGNORECASE)
+_WORKDAY_APPLY_RE = re.compile(r"/(?:[a-z]{2}-[A-Z]{2}/)?([a-z0-9][a-z0-9_\-]+)/(?:job|jobs)(?:/|$)", re.IGNORECASE)
+_WORKDAY_WD_RE    = re.compile(r"^wd\d+$", re.IGNORECASE)
+_WORKDAY_BLOCKLIST = frozenset({"wday", "cxs", "job", "jobs", "apply", "login", "redirect", "external"})
 
 
 @dataclass
@@ -54,11 +73,13 @@ class NormalizedJob:
     posted_at: datetime | None
 
 
-def strip_html(html: str) -> str:
+def strip_html(raw: str) -> str:
     """Strip all HTML tags and decode entities. Returns plain text."""
-    if not html:
+    if not raw:
         return ""
-    return bleach.clean(html, tags=[], strip=True).strip()
+    # Unescape entities first (&lt; → <) so bleach can then strip the real tags
+    unescaped = _html.unescape(raw)
+    return bleach.clean(unescaped, tags=[], strip=True).strip()
 
 
 def extract_experience(text: str) -> tuple[int | None, int | None]:
@@ -116,10 +137,34 @@ def extract_ats_slug_from_url(url: str) -> tuple[str, str] | None:
         (_GREENHOUSE_URL_RE, "greenhouse"),
         (_LEVER_URL_RE, "lever"),
         (_ASHBY_URL_RE, "ashby"),
+        (_BAMBOOHR_URL_RE, "bamboohr"),
+        (_ICIMS_URL_RE, "icims"),
+        (_PAYLOCITY_URL_RE, "paylocity"),
     ]:
         m = pattern.search(url)
         if m:
-            slug = m.group(1)
+            slug = m.group(1).lower()
             if SLUG_RE.match(slug):
                 return ats_type, slug
+
+    # Workday — composite slug "company|wd_num|site_id"
+    bm = _WORKDAY_BASE_RE.search(url)
+    if bm:
+        company = bm.group(1).lower()
+        wd_num  = bm.group(2).lower()
+        if _WORKDAY_WD_RE.match(wd_num):
+            path = url[bm.end():]
+            site_id: str | None = None
+            # Try API path first: /wday/cxs/{company}/{site_id}/
+            am = _WORKDAY_API_RE.search(path)
+            if am:
+                site_id = am.group(1)
+            else:
+                # Apply URL: /[en-US/]{site_id}/job/
+                pm = _WORKDAY_APPLY_RE.search(path)
+                if pm:
+                    site_id = pm.group(1)
+            if site_id and site_id.lower() not in _WORKDAY_BLOCKLIST and len(site_id) >= 2:
+                return "workday", f"{company}|{wd_num}|{site_id}"
+
     return None
