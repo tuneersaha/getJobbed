@@ -274,9 +274,12 @@ class JobFetchWorker(BaseWorker):
         fetcher = _get_fetcher(source)
         discovered: list[tuple[str, str]] = []
 
-        if source in ("themuse", "remotive"):
+        if source == "themuse":
             jobs = await fetcher.fetch(client)
             disc: list[tuple[str, str]] = []
+        elif source == "remotive":
+            jobs, disc = await fetcher.fetch(client)
+            discovered.extend(disc)
         else:
             jobs, disc = await fetcher.fetch(client, roles)
             discovered.extend(disc)

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 # Valid source statuses per target transition
 _APPLIED_FROM  = {"pending", "tailoring", "ready"}
-_DELETED_FROM  = {"pending", "tailoring", "ready", "applied"}
+_DELETED_FROM  = {"pending", "tailoring", "ready", "applied", "interviewing", "offer", "accepted", "rejected"}
 
 
 @router.patch("/{match_id}", status_code=200)
