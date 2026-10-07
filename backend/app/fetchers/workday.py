@@ -97,8 +97,8 @@ async def fetch(
         except Exception as exc:
             raise RuntimeError(f"workday/{ats_slug} request failed: {exc}") from exc
 
-        if resp.status_code == 404:
-            raise ValueError(f"workday/{ats_slug} 404 — dead slug")
+        if resp.status_code in (404, 422):
+            raise ValueError(f"workday/{ats_slug} {resp.status_code} — dead slug")
         if resp.status_code != 200:
             raise RuntimeError(f"workday/{ats_slug} HTTP {resp.status_code}")
 

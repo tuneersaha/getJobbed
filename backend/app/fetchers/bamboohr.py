@@ -45,6 +45,9 @@ async def fetch(
         raise ValueError(f"bamboohr/{ats_slug} 404 — dead slug")
     if resp.status_code != 200:
         raise RuntimeError(f"bamboohr/{ats_slug} HTTP {resp.status_code}")
+    # If slug doesn't exist, BambooHR 302s to www.bamboohr.com
+    if resp.url.host != f"{ats_slug}.bamboohr.com":
+        raise ValueError(f"bamboohr/{ats_slug} redirected to {resp.url.host} — dead slug")
 
     try:
         data = resp.json()
