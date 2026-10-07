@@ -12,6 +12,8 @@ Auth: all /api/* routes require Google ID token (see app/auth.py).
 import asyncio
 import os
 import logging
+import logging.handlers
+import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -21,10 +23,20 @@ from fastapi.exceptions import RequestValidationError
 
 from app.db import create_pool, set_pool, get_pool, get_conn
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT)
+
+# Also write to a rotating file so logs can be inspected on the host
+_log_dir = pathlib.Path(os.environ.get("LOG_DIR", "/app/logs"))
+_log_dir.mkdir(parents=True, exist_ok=True)
+_file_handler = logging.handlers.RotatingFileHandler(
+    _log_dir / "backend.log",
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=3,
+    encoding="utf-8",
 )
+_file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+logging.getLogger().addHandler(_file_handler)
 logger = logging.getLogger(__name__)
 
 # Number of concurrent JobFetchWorker asyncio tasks
