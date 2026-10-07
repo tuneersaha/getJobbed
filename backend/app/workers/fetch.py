@@ -19,6 +19,8 @@ from app.workers.base import BaseWorker, enqueue_task
 logger = logging.getLogger(__name__)
 
 FETCH_CONCURRENCY = int(os.environ.get("FETCH_CONCURRENCY", "20"))
+# Paylocity aggressively rate-limits; cap its concurrency regardless of FETCH_CONCURRENCY
+PAYLOCITY_CONCURRENCY = int(os.environ.get("PAYLOCITY_CONCURRENCY", "3"))
 COLD_SAMPLE_SIZE  = int(os.environ.get("COLD_SAMPLE_SIZE", "100"))
 DEAD_PROBE_SIZE   = int(os.environ.get("DEAD_PROBE_BATCH_SIZE", "20"))
 EMPTY_DEAD_THRESHOLD = 5  # consecutive empty runs → mark dead
@@ -116,7 +118,8 @@ class JobFetchWorker(BaseWorker):
             logger.info("fetch/%s: no companies to fetch this cycle", source)
             return 0, 0, []
 
-        sem = asyncio.Semaphore(FETCH_CONCURRENCY)
+        concurrency = PAYLOCITY_CONCURRENCY if source == "paylocity" else FETCH_CONCURRENCY
+        sem = asyncio.Semaphore(concurrency)
         fetcher = _get_fetcher(source)
 
         async def fetch_one(company):

@@ -4,6 +4,7 @@ GET https://recruiting.paylocity.com/recruiting/jobs/All/{guid}
 Slug is a UUID GUID. Accept: application/json to get JSON response.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -30,14 +31,24 @@ async def fetch(
     company_name: str,
 ) -> list[NormalizedJob]:
     url = f"{_BASE}/{ats_slug}"
-    try:
-        resp = await client.get(
-            url,
-            headers={"Accept": "application/json"},
-            timeout=15,
-        )
-    except Exception as exc:
-        raise RuntimeError(f"paylocity/{ats_slug} request failed: {exc}") from exc
+    resp = None
+    for attempt in range(3):
+        try:
+            resp = await client.get(
+                url,
+                headers={"Accept": "application/json"},
+                timeout=15,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"paylocity/{ats_slug} request failed: {exc}") from exc
+
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", 60 * (attempt + 1)))
+            retry_after = min(retry_after, 120)
+            logger.warning("paylocity/%s 429 — sleeping %ds (attempt %d)", ats_slug, retry_after, attempt + 1)
+            await asyncio.sleep(retry_after)
+            continue
+        break
 
     if resp.status_code == 404:
         raise ValueError(f"paylocity/{ats_slug} 404 — dead slug")
