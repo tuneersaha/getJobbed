@@ -17,13 +17,17 @@ import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Auth.js v5 reads AUTH_SECRET; bridge to NEXTAUTH_SECRET for backwards compat
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          // Request offline access so Google returns an id_token
+          // openid is required for id_token; offline for refresh_token
+          scope: "openid email profile",
           access_type: "offline",
           prompt: "consent",
         },

@@ -1,22 +1,27 @@
-/**
- * Root page — redirect logic:
- *   No session → /auth/signin
- *   No profile → /onboarding
- *   Has profile → /dashboard
- *
- * Sprint 1: placeholder until Sprint 5 frontend implementation.
- */
-
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { redirect } from 'next/navigation'
+import { auth } from '@/auth'
+import { apiFetch } from '@/lib/api'
+import type { ProfileResponse } from '@/lib/types'
 
 export default async function RootPage() {
-  const session = await auth();
+  const session = await auth()
 
+  // No session → signin (checking !session avoids redirect loop when id_token missing)
   if (!session) {
-    redirect("/auth/signin");
+    redirect('/auth/signin')
   }
 
-  // TODO Sprint 5: check if profile is complete, redirect to /onboarding if not
-  redirect("/dashboard");
+  let profile: ProfileResponse | null = null
+  try {
+    profile = await apiFetch<ProfileResponse>('/api/profile', session.id_token ?? '')
+  } catch {
+    // API unreachable, 401, or first-time user with no profile
+    redirect('/onboarding')
+  }
+
+  if (!profile || profile.desired_roles.length === 0) {
+    redirect('/onboarding')
+  }
+
+  redirect('/dashboard')
 }

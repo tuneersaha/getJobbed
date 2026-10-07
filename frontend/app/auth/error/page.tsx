@@ -1,8 +1,11 @@
-export default function AuthErrorPage({
+// Next.js 15: searchParams is a Promise
+export default async function AuthErrorPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const { error } = await searchParams;
+
   return (
     <main style={{
       display: "flex",
@@ -16,7 +19,7 @@ export default function AuthErrorPage({
         Sign-in error
       </h1>
       <p style={{ color: "var(--fg-2)", fontSize: "13px" }}>
-        {searchParams.error ?? "An unknown error occurred during sign-in."}
+        {error ?? "An unknown error occurred during sign-in."}
       </p>
       <a href="/auth/signin" style={{ color: "var(--accent)", fontSize: "13px" }}>
         Try again

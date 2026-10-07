@@ -121,8 +121,9 @@ class ProfileUpdate(BaseModel):
 # ─── Fetch trigger ────────────────────────────────────────────────────────────
 
 class FetchTriggerResponse(BaseModel):
-    task_id: int
+    task_ids: list[int]
     queued_at: str
+    sources: list[str]
 
 
 # ─── Stats ────────────────────────────────────────────────────────────────────

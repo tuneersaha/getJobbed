@@ -1,33 +1,39 @@
 """
 Manual fetch trigger.
 
-POST /api/fetch/trigger  — enqueue a fetch_jobs task (with cooldown guard)
+POST /api/fetch/trigger  — enqueue one fetch_jobs task per source (with cooldown guard)
 """
 
+import datetime
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.auth import require_auth
 from app.db import get_conn
-from app.schemas import FetchTriggerResponse
+from app.workers.base import enqueue_task
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fetch", tags=["fetch"])
 
+_ALL_SOURCES = [
+    "greenhouse", "lever", "ashby", "bamboohr", "icims",
+    "paylocity", "workday", "adzuna", "remotive", "themuse",
+]
+
 
 @router.post("/trigger", status_code=202)
 async def trigger_fetch(user_id: str = Depends(require_auth)):
     """
-    Manually enqueue a fetch_jobs task.
+    Manually enqueue one fetch_jobs task per source.
 
     Cooldown: if a fetch run completed within the last FETCH_TRIGGER_COOLDOWN_MINUTES
     minutes, return 429 FETCH_COOLDOWN_ACTIVE.
 
-    Returns 202 with task_id and queued_at.
+    Returns 202 with task_ids and queued_at.
     """
     cooldown_minutes = int(os.environ.get("FETCH_TRIGGER_COOLDOWN_MINUTES", "30"))
 
@@ -58,21 +64,21 @@ async def trigger_fetch(user_id: str = Depends(require_auth)):
                 },
             )
 
-        # Enqueue a fetch_jobs task for all sources
-        ins_cur = await conn.execute(
-            """
-            INSERT INTO job_queue (task_type, payload, status, max_attempts)
-            VALUES ('fetch_jobs', '{}', 'pending', 3)
-            RETURNING id, created_at
-            """,
-        )
-        row = await ins_cur.fetchone()
-        task_id = row[0]
-        queued_at = row[1].isoformat()
+        # Enqueue one task per source — stagger slightly so workers don't all start at once
+        task_ids = []
+        queued_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        for i, source in enumerate(_ALL_SOURCES):
+            task_id = await enqueue_task(
+                conn,
+                "fetch_jobs",
+                {"source": source},
+                run_at_offset_seconds=i * 2,
+            )
+            task_ids.append(task_id)
 
-    logger.info("fetch.triggered task_id=%s user_id=%s", task_id, user_id)
+    logger.info("fetch.triggered sources=%d user_id=%s task_ids=%s", len(task_ids), user_id, task_ids)
 
     return JSONResponse(
         status_code=202,
-        content={"task_id": task_id, "queued_at": queued_at},
+        content={"task_ids": task_ids, "queued_at": queued_at, "sources": _ALL_SOURCES},
     )
