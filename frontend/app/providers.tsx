@@ -1,13 +1,23 @@
 'use client'
 
 import { SessionProvider } from 'next-auth/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { signOut } from 'next-auth/react'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { useState } from 'react'
+import { ApiError } from '@/lib/api'
+
+function handle401(error: unknown) {
+  if (error instanceof ApiError && error.status === 401) {
+    signOut({ callbackUrl: '/auth/signin' })
+  }
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        queryCache: new QueryCache({ onError: handle401 }),
+        mutationCache: new MutationCache({ onError: handle401 }),
         defaultOptions: {
           queries: {
             staleTime: 30_000,

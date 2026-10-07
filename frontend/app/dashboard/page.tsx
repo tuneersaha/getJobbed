@@ -3,15 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, ApiError } from '@/lib/api'
 import type {
   JobListItem, JobListResponse, JobDetail,
   TailoredResumeResponse, StatsResponse, FetchTriggerResponse,
 } from '@/lib/types'
+import { AppNav } from '@/app/components/AppNav'
 import {
-  Briefcase, BarChart2, Settings, RefreshCw, Trash2, ExternalLink,
+  Briefcase, RefreshCw, Trash2, ExternalLink,
   AlertTriangle, X, CheckCircle, Clock, Loader2, ChevronDown,
 } from 'lucide-react'
 
@@ -40,24 +40,6 @@ function safeApplyUrl(url: string) {
 
 // ── sub-components ──────────────────────────────────────────────────────────
 
-function BottomNav({ active }: { active: 'dashboard' | 'applied' | 'settings' }) {
-  return (
-    <nav className="bottom-nav" aria-label="Main navigation">
-      <Link href="/dashboard" className={`bottom-nav-item${active === 'dashboard' ? ' active' : ''}`} aria-label="Jobs">
-        <Briefcase size={20} />
-        <span>Jobs</span>
-      </Link>
-      <Link href="/applied" className={`bottom-nav-item${active === 'applied' ? ' active' : ''}`} aria-label="Applied">
-        <CheckCircle size={20} />
-        <span>Applied</span>
-      </Link>
-      <Link href="/settings" className={`bottom-nav-item${active === 'settings' ? ' active' : ''}`} aria-label="Settings">
-        <Settings size={20} />
-        <span>Settings</span>
-      </Link>
-    </nav>
-  )
-}
 
 function ScoreBadge({ score }: { score: number }) {
   return (
@@ -562,31 +544,24 @@ export default function DashboardPage() {
   }
 
   return (
-    <main style={{
-      minHeight: '100dvh',
-      background: 'var(--bg)',
-      display: 'flex',
-      flexDirection: 'column',
-      paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
-    }}>
+    <div className="app-layout">
+      <AppNav />
+      <main style={{
+        flex: 1, minWidth: 0,
+        background: 'var(--bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+      }} className="app-main page-bottom-pad">
       {/* Top bar */}
       <header style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center',
         padding: '0 14px', height: '48px',
         borderBottom: '1px solid var(--border)',
         background: 'var(--bg-2)',
         flexShrink: 0,
       }}>
-        <span style={{ fontFamily: 'var(--font-head)', fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em' }}>GetJobbed</span>
-        {/* Desktop nav */}
-        <nav style={{ display: 'none' }} className="desktop-nav">
-          <Link href="/dashboard" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: 500, marginRight: '16px' }}>Jobs</Link>
-          <Link href="/applied" style={{ color: 'var(--fg-3)', fontSize: '13px', marginRight: '16px' }}>Applied</Link>
-          <Link href="/settings" style={{ color: 'var(--fg-3)', fontSize: '13px' }}>Settings</Link>
-        </nav>
-        <span style={{ fontSize: '12px', color: 'var(--fg-3)', display: 'none' }} id="desktop-email">
-          {session?.user?.email}
-        </span>
+        <span style={{ fontFamily: 'var(--font-head)', fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em' }}>Jobs</span>
       </header>
 
       {/* Stats bar */}
@@ -716,18 +691,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <BottomNav active="dashboard" />
-
-      {/* Desktop layout styles injected inline — avoids extra CSS file */}
-      <style>{`
-        @media (min-width: 768px) {
-          .job-list-panel { width: 340px !important; flex-shrink: 0; }
-          .detail-panel { display: flex !important; flex-direction: column; }
-          .desktop-nav { display: flex !important; align-items: center; }
-          #desktop-email { display: inline !important; }
-          main { padding-bottom: 0 !important; }
-        }
-      `}</style>
-    </main>
+      </main>
+    </div>
   )
 }

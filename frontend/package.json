@@ -3,18 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "NODE_OPTIONS=--dns-result-order=ipv4first next dev",
+    "build": "NODE_OPTIONS=--dns-result-order=ipv4first next build",
+    "start": "NODE_OPTIONS=--dns-result-order=ipv4first next start",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.62.2",
+    "framer-motion": "^14.0.0",
+    "lucide-react": "^0.468.0",
     "next": "15.5.27",
     "next-auth": "^5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@tanstack/react-query": "^5.62.2",
-    "lucide-react": "^0.468.0"
+    "undici": "^8.11.2"
   },
   "overrides": {
     "postcss": "^8.5.29"

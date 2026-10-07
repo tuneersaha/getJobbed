@@ -271,7 +271,7 @@ class JobFetchWorker(BaseWorker):
         fetcher = _get_fetcher(source)
         discovered: list[tuple[str, str]] = []
 
-        if source == "themuse":
+        if source in ("themuse", "remotive"):
             jobs = await fetcher.fetch(client)
             disc: list[tuple[str, str]] = []
         else:

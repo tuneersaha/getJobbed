@@ -14,8 +14,11 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+JOB_MAX_AGE_DAYS = 60
 
 from psycopg.types.json import Jsonb
 
@@ -75,6 +78,7 @@ class _Job:
     experience_max: Optional[int]
     requires_foreign_citizenship: str
     embedding: Optional[list[float]]
+    posted_at: Optional[datetime]
 
 
 @dataclass
@@ -96,6 +100,12 @@ def hard_filter(job: _Job, profile: _Profile, excluded_job_ids: set[str]) -> Opt
     """
     if job.id in excluded_job_ids:
         return "excluded"
+
+    # Age filter — reject jobs older than JOB_MAX_AGE_DAYS
+    if job.posted_at is not None:
+        age_days = (datetime.now(timezone.utc) - job.posted_at).days
+        if age_days > JOB_MAX_AGE_DAYS:
+            return f"too_old:{age_days}d"
 
     title_lower = job.title.lower()
 
@@ -223,7 +233,7 @@ class ScoringWorker(BaseWorker):
                 """
                 SELECT id, title, description, location, work_type,
                        experience_min, experience_max,
-                       requires_foreign_citizenship, embedding
+                       requires_foreign_citizenship, embedding, posted_at
                 FROM jobs WHERE id = %s
                 """,
                 [job_id],
@@ -275,6 +285,7 @@ class ScoringWorker(BaseWorker):
             experience_max=job_row[6],
             requires_foreign_citizenship=str(job_row[7]),
             embedding=job_row[8],
+            posted_at=job_row[9],
         )
 
         profile = _Profile(

@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import type { AppliedListItem, AppliedListResponse } from '@/lib/types'
-import { Briefcase, CheckCircle, Settings, ChevronDown, Trash2, TrendingUp } from 'lucide-react'
+import { AppNav } from '@/app/components/AppNav'
+import { CheckCircle, ChevronDown, Trash2, TrendingUp } from 'lucide-react'
 
 const STATUSES = ['applied', 'interviewing', 'offer', 'accepted', 'rejected'] as const
 type AppStatus = (typeof STATUSES)[number]
@@ -40,21 +40,6 @@ function relTime(iso: string | null) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
-function BottomNav({ active }: { active: 'dashboard' | 'applied' | 'settings' }) {
-  return (
-    <nav className="bottom-nav" aria-label="Main navigation">
-      <Link href="/dashboard" className={`bottom-nav-item${active === 'dashboard' ? ' active' : ''}`} aria-label="Jobs">
-        <Briefcase size={20} /><span>Jobs</span>
-      </Link>
-      <Link href="/applied" className={`bottom-nav-item${active === 'applied' ? ' active' : ''}`} aria-label="Applied">
-        <CheckCircle size={20} /><span>Applied</span>
-      </Link>
-      <Link href="/settings" className={`bottom-nav-item${active === 'settings' ? ' active' : ''}`} aria-label="Settings">
-        <Settings size={20} /><span>Settings</span>
-      </Link>
-    </nav>
-  )
-}
 
 function DeleteModal({ title: jobTitle, onConfirm, onCancel, loading }: {
   title: string; onConfirm: () => void; onCancel: () => void; loading: boolean
@@ -201,11 +186,14 @@ export default function AppliedPage() {
   )
 
   return (
-    <main style={{
-      minHeight: '100dvh', background: 'var(--bg)',
-      display: 'flex', flexDirection: 'column',
-      paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
-    }}>
+    <div className="app-layout">
+      <AppNav />
+      <main style={{
+        flex: 1, minWidth: 0,
+        background: 'var(--bg)',
+        display: 'flex', flexDirection: 'column',
+        paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+      }} className="app-main page-bottom-pad">
       {/* Header */}
       <header style={{
         display: 'flex', alignItems: 'center', gap: '10px',
@@ -329,7 +317,7 @@ export default function AppliedPage() {
         />
       )}
 
-      <BottomNav active="applied" />
-    </main>
+      </main>
+    </div>
   )
 }
