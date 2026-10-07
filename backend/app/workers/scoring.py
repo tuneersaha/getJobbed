@@ -184,11 +184,37 @@ class ScoringWorker(BaseWorker):
     task_type = "score_job"
 
     async def process_task(self, task_id: int, payload: dict, attempts: int) -> None:
-        job_id  = payload.get("job_id")
-        user_id = payload.get("user_id")
-        if not job_id or not user_id:
-            raise ValueError("score_job payload missing job_id or user_id")
+        job_id = payload.get("job_id")
+        if not job_id:
+            raise ValueError("score_job payload missing job_id")
 
+        from app.db import get_conn
+
+        # If user_id provided score for that user; otherwise score for all active users
+        user_id = payload.get("user_id")
+        if user_id:
+            user_ids = [user_id]
+        else:
+            async with get_conn() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT DISTINCT up.user_id
+                    FROM user_profiles up
+                    JOIN user_resumes ur
+                      ON ur.user_id = up.user_id AND ur.is_active = TRUE
+                    WHERE array_length(up.desired_roles, 1) > 0
+                    """
+                )
+                rows = await cur.fetchall()
+            user_ids = [str(r[0]) for r in rows]
+            if not user_ids:
+                logger.info("score_job: no active users with profiles — skipping job %s", job_id)
+                return
+
+        for uid in user_ids:
+            await self._score_for_user(job_id, uid)
+
+    async def _score_for_user(self, job_id: str, user_id: str) -> None:
         from app.db import get_conn
 
         # ── Load job + profile + active resume ──────────────────────────────
